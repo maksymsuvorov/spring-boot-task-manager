@@ -8,6 +8,7 @@ import com.maksymsuvorov.taskflow.repository.TaskRepository;
 import com.maksymsuvorov.taskflow.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ public class UserServiceImplementation implements UserServiceInterface {
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final TaskRepository taskRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional(readOnly = true)
@@ -44,6 +46,7 @@ public class UserServiceImplementation implements UserServiceInterface {
         User user = new User();
         user.setEmail(request.email());
         user.setName(request.name());
+        user.setPassword(this.passwordEncoder.encode(request.password()));
 
         return this.userRepository.save(user);
     }

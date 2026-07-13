@@ -26,6 +26,13 @@ public class User {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(nullable = false, length = 100)
+    private String password;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private Role role;
+
     @OneToMany(mappedBy = "owner")
     private Set<Project> projects = new HashSet<>();
 
@@ -42,6 +49,10 @@ public class User {
     public void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+
+        if (this.role == null) {
+            this.role = Role.USER;
+        }
     }
 
     @PreUpdate

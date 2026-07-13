@@ -8,6 +8,7 @@ import com.maksymsuvorov.taskflow.model.User;
 import com.maksymsuvorov.taskflow.repository.ProjectRepository;
 import com.maksymsuvorov.taskflow.repository.TaskRepository;
 import com.maksymsuvorov.taskflow.repository.UserRepository;
+import com.maksymsuvorov.taskflow.security.AuthorizationService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class TaskServiceImplementation implements TaskServiceInterface {
     private final TaskRepository taskRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final AuthorizationService authorizationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -46,6 +48,9 @@ public class TaskServiceImplementation implements TaskServiceInterface {
         Project project = this.projectRepository.findById(projectId)
                 .orElseThrow(() -> new EntityNotFoundException("Project with id " + projectId + " does not exist."));
 
+        // Only the project owner (or an admin) can add tasks to a project.
+        this.authorizationService.requireProjectOwnerOrAdmin(project);
+
         Task task = new Task();
         task.setTitle(request.title());
         task.setDescription(request.description());
@@ -62,6 +67,9 @@ public class TaskServiceImplementation implements TaskServiceInterface {
         Task task = this.taskRepository.findById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Task with id " + taskId + " was not found."));
 
+        // Project owner, current assignee, or admin.
+        this.authorizationService.requireTaskModifyAccess(task);
+
         task.setTitle(request.title());
         task.setDescription(request.description());
         task.setStatus(request.status());
@@ -76,6 +84,9 @@ public class TaskServiceImplementation implements TaskServiceInterface {
     public void deleteTaskById(Long taskId) throws EntityNotFoundException {
         Task task = this.taskRepository.findById(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Task with id " + taskId + " was not found."));
+
+        // Deleting is owner-level: assignees can update, not delete.
+        this.authorizationService.requireProjectOwnerOrAdmin(task.getProject());
 
         this.taskRepository.delete(task);
     }
