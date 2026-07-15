@@ -12,12 +12,14 @@ A task management REST API for small teams, built with **Spring Boot 4** as a ha
 ## Features
 
 - CRUD for users, projects, and tasks with a DTO layer and bean validation
+- Filtering, sorting, and pagination on all list endpoints (JPA Specifications, `Pageable`)
+- Visibility-scoped listings: users see only tasks/projects they own or are assigned to
 - Stateless JWT authentication with short-lived access tokens (15 min)
 - Rotating, single-use refresh tokens stored server-side (SHA-256 hashed)
 - Role-based access control (`USER` / `ADMIN`) via method security
 - Resource ownership checks (only a project's owner can modify it)
 - Consistent JSON error responses (`400` / `401` / `403` / `404` / `409`)
-- Versioned database schema via Flyway (`V1`–`V4`)
+- Versioned database schema via Flyway
 
 ## Getting started
 
@@ -84,16 +86,42 @@ All values live in `application.properties` with environment-variable overrides:
 | `ADMIN_EMAIL` | *(empty = disabled)* | Seeds/promotes an ADMIN account on startup |
 | `ADMIN_PASSWORD` | *(empty = disabled)* | Password for the seeded admin |
 
+Pagination is capped globally: `spring.data.web.pageable.max-page-size=100` (larger `size` values are clamped, not rejected).
+
 ## API
 
 Base URL: `http://localhost:8080`
 
+### Pagination, filtering & sorting
+
+All list endpoints accept:
+
+| Parameter | Example | Notes                                                         |
+|---|---|---------------------------------------------------------------|
+| `page` | `page=0` | Zero-based page index (default `0`)                           |
+| `size` | `size=20` | Page size (default `20`, max `100`)                           |
+| `sort` | `sort=dueDate,desc` | Property must be in the endpoint's whitelist, otherwise `400` |
+
+List responses use a stable pagination envelope:
+
+```json
+{
+  "content": [ ... ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 47,
+  "totalPages": 3
+}
+```
+
+Filter parameters are optional. Absent means "no constraint". Invalid enum or numeric values return `400` (never `500`).
+
 ### Auth (public)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/auth/register` | Register; returns tokens + user. Role is always `USER`. |
-| `POST` | `/api/auth/login` | Login with email + password; returns tokens + user |
+| Method | Endpoint | Description                                              |
+|---|---|----------------------------------------------------------|
+| `POST` | `/api/auth/register` | Returns tokens + user. Role is always `USER`.  |
+| `POST` | `/api/auth/login` | Login with email + password. Returns tokens + user       |
 | `POST` | `/api/auth/refresh` | Exchange a refresh token for a new token pair (rotation) |
 
 ### Users
@@ -106,25 +134,53 @@ Base URL: `http://localhost:8080`
 | `PUT` | `/api/users/{id}` | self or `ADMIN` |
 | `DELETE` | `/api/users/{id}` | `ADMIN` |
 
+`GET /api/users` filters: `name` (contains), `email` (contains), `role` (`USER`/`ADMIN`).
+Sortable by: `name`, `email`, `createdAt`.
+
+```http
+GET /api/users?name=ali&role=USER&sort=name,asc
+```
+
+The user list is deliberately **not** visibility-scoped — team members need it to pick task assignees.
+
 ### Projects
 
 | Method | Endpoint | Access |
 |---|---|---|
 | `POST` | `/api/projects` | authenticated (caller becomes owner) |
-| `GET` | `/api/projects` | authenticated |
+| `GET` | `/api/projects` | authenticated, **visibility-scoped** |
 | `GET` | `/api/projects/{id}` | authenticated |
 | `PUT` | `/api/projects/{id}` | project owner or `ADMIN` |
 | `DELETE` | `/api/projects/{id}` | project owner or `ADMIN` (fails with `409` while tasks exist) |
+
+**Visibility**: `GET /api/projects` returns projects the caller owns **or** has at least one task assigned to them in. Admins see everything.
+
+`GET /api/projects` filters: `name` (contains, case-insensitive), `ownerId`.
+Sortable by: `name`, `createdAt`, `updatedAt`.
+
+```http
+GET /api/projects?name=marketing&sort=updatedAt,desc&page=0&size=10
+```
 
 ### Tasks
 
 | Method | Endpoint | Access |
 |---|---|---|
+| `GET` | `/api/tasks` | authenticated, **visibility-scoped** |
 | `POST` | `/api/projects/{projectId}/tasks` | project owner or `ADMIN` |
 | `GET` | `/api/projects/{projectId}/tasks` | authenticated |
 | `GET` | `/api/tasks/{id}` | authenticated |
 | `PUT` | `/api/tasks/{id}` | project owner, task assignee, or `ADMIN` |
 | `DELETE` | `/api/tasks/{id}` | project owner or `ADMIN` |
+
+**Visibility**: `GET /api/tasks` returns tasks the caller is assigned to **or** that belong to a project they own (including unassigned tasks in their projects). Admins see everything.
+
+`GET /api/tasks` filters: `status`, `priority`, `projectId`, `assigneeId`, `dueBefore` (exclusive, ISO-8601 date).
+Sortable by: `title`, `status`, `priority`, `dueDate`, `createdAt`, `updatedAt`.
+
+```http
+GET /api/tasks?status=TODO&priority=HIGH&dueBefore=2026-08-01&sort=dueDate,asc&page=0&size=20
+```
 
 ### Request examples
 
@@ -165,11 +221,11 @@ Base URL: `http://localhost:8080`
 }
 ```
 
-Validation failures (`400`) additionally populate `fieldErrors` with a per-field message map.
+Validation failures (`400`) additionally populate `fieldErrors` with a per-field message map. Invalid sort properties, unknown enum values, and malformed query parameters also return `400` with a descriptive message.
 
 ## Database schema
 
-Managed by Flyway (`src/main/resources/db/migration`), with Hibernate in `validate` mode
+Managed by Flyway (`src/main/resources/db/migration`), with Hibernate in `validate` mode:
 
 | Migration | Change |
 |---|---|
@@ -182,4 +238,4 @@ Relationships: `User 1—N Project` (owner), `Project 1—N Task`, `User 1—N T
 
 ## Security model
 
-Every request passes through a JWT filter that validates the access token's signature and expiry, loads the user, and populates the security context — no server-side sessions. Authorization is two-layered: role checks (`@PreAuthorize`) gate admin operations, while ownership checks in the service layer ensure users can only modify their own projects and tasks (defense against BOLA/IDOR). Passwords are BCrypt-hashed; refresh tokens are random 256-bit values stored only as SHA-256 hashes and rotated on every use, so they can be revoked server-side and a leaked database does not expose usable tokens.
+Every request passes through a JWT filter that validates the access token's signature and expiry, loads the user, and populates the security context — no server-side sessions. Authorization is three-layered: role checks (`@PreAuthorize`) gate admin operations, ownership checks in the service layer ensure users can only modify their own projects and tasks and list endpoints apply visibility as a query predicate (a JPA Specification composed into the `WHERE` clause), so row-level access control survives pagination instead of being filtered after the fetch. Passwords are BCrypt-hashed, refresh tokens are random 256-bit values stored only as SHA-256 hashes and rotated on every use, so they can be revoked server-side and a leaked database does not expose usable tokens. Client-supplied sort properties are validated against per-endpoint whitelists.

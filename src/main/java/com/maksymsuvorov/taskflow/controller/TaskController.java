@@ -1,13 +1,17 @@
 package com.maksymsuvorov.taskflow.controller;
 
+import com.maksymsuvorov.taskflow.controller.dto.PageResponse;
 import com.maksymsuvorov.taskflow.controller.dto.TaskCreateRequest;
 import com.maksymsuvorov.taskflow.controller.dto.TaskResponse;
 import com.maksymsuvorov.taskflow.controller.dto.TaskUpdateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.TaskFilter;
 import com.maksymsuvorov.taskflow.mapper.TaskMapper;
 import com.maksymsuvorov.taskflow.model.Task;
 import com.maksymsuvorov.taskflow.service.TaskServiceInterface;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +40,15 @@ public class TaskController {
         return this.taskService.getTasksByProjectId(projectId).stream()
                 .map(TaskMapper::toResponse)
                 .toList();
+    }
+
+    @GetMapping("/tasks")
+    public PageResponse<TaskResponse> getTasks(@ModelAttribute TaskFilter filter,
+                                               @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return PageResponse.from(
+                this.taskService.getTasks(filter, pageable)
+                        .map(TaskMapper::toResponse)
+        );
     }
 
     @GetMapping("/tasks/{id}")

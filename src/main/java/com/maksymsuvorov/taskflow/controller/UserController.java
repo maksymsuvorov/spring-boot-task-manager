@@ -1,19 +1,22 @@
 package com.maksymsuvorov.taskflow.controller;
 
+import com.maksymsuvorov.taskflow.controller.dto.PageResponse;
 import com.maksymsuvorov.taskflow.controller.dto.UserCreateRequest;
 import com.maksymsuvorov.taskflow.controller.dto.UserResponse;
 import com.maksymsuvorov.taskflow.controller.dto.UserUpdateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.UserFilter;
 import com.maksymsuvorov.taskflow.mapper.UserMapper;
 import com.maksymsuvorov.taskflow.model.User;
 import com.maksymsuvorov.taskflow.service.UserServiceInterface;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -34,10 +37,12 @@ public class UserController {
     }
 
     @GetMapping
-    public List<UserResponse> getAllUsers() {
-        return this.userService.getAllUsers().stream()
-                .map(UserMapper::toResponse)
-                .toList();
+    public PageResponse<UserResponse> getUsers(@ModelAttribute UserFilter filter,
+                                               @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return PageResponse.from(
+                this.userService.getUsers(filter, pageable)
+                        .map(UserMapper::toResponse)
+        );
     }
 
     @GetMapping("/{id}")

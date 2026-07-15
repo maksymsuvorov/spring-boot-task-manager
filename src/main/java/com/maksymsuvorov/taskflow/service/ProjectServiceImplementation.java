@@ -1,17 +1,23 @@
 package com.maksymsuvorov.taskflow.service;
 
 import com.maksymsuvorov.taskflow.controller.dto.ProjectCreateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.ProjectFilter;
 import com.maksymsuvorov.taskflow.controller.dto.ProjectUpdateRequest;
 import com.maksymsuvorov.taskflow.model.Project;
 import com.maksymsuvorov.taskflow.repository.ProjectRepository;
 import com.maksymsuvorov.taskflow.repository.TaskRepository;
+import com.maksymsuvorov.taskflow.repository.specification.ProjectSpecification;
 import com.maksymsuvorov.taskflow.security.AuthorizationService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,10 +28,23 @@ public class ProjectServiceImplementation implements ProjectServiceInterface {
     private final TaskRepository taskRepository;
     private final AuthorizationService authorizationService;
 
+    private static final Set<String> ALLOWED_SORT_PROPERTIES =
+            Set.of("name", "createdAt", "updatedAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<Project> getAllProjects() {
-        return this.projectRepository.findAll();
+    public Page<Project> getProjects(ProjectFilter filter, Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), ALLOWED_SORT_PROPERTIES);
+
+        Specification<Project> specification = Specification.allOf(
+                this.authorizationService.isAdmin()
+                        ? Specification.unrestricted()
+                        : ProjectSpecification.visibleTo(this.authorizationService.currentEmail()),
+                ProjectSpecification.nameContains(filter.name()),
+                ProjectSpecification.hasOwner(filter.ownerId())
+        );
+
+        return this.projectRepository.findAll(specification, pageable);
     }
 
     @Override

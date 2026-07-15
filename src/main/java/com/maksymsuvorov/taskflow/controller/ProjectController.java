@@ -1,18 +1,21 @@
 package com.maksymsuvorov.taskflow.controller;
 
+import com.maksymsuvorov.taskflow.controller.dto.PageResponse;
 import com.maksymsuvorov.taskflow.controller.dto.ProjectCreateRequest;
 import com.maksymsuvorov.taskflow.controller.dto.ProjectResponse;
 import com.maksymsuvorov.taskflow.controller.dto.ProjectUpdateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.ProjectFilter;
 import com.maksymsuvorov.taskflow.mapper.ProjectMapper;
 import com.maksymsuvorov.taskflow.model.Project;
 import com.maksymsuvorov.taskflow.service.ProjectServiceInterface;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -31,10 +34,12 @@ public class ProjectController {
     }
 
     @GetMapping
-    public List<ProjectResponse> getAllProjects() {
-        return this.projectService.getAllProjects().stream()
-                .map(ProjectMapper::toResponse)
-                .toList();
+    public PageResponse<ProjectResponse> getProjects(@ModelAttribute ProjectFilter filter,
+                                                     @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        return PageResponse.from(
+                this.projectService.getProjects(filter, pageable)
+                        .map(ProjectMapper::toResponse)
+        );
     }
 
     @GetMapping("/{id}")

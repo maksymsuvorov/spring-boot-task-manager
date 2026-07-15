@@ -1,14 +1,18 @@
 package com.maksymsuvorov.taskflow.service;
 
 import com.maksymsuvorov.taskflow.controller.dto.ProjectCreateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.ProjectFilter;
 import com.maksymsuvorov.taskflow.controller.dto.ProjectUpdateRequest;
 import com.maksymsuvorov.taskflow.model.Project;
 import jakarta.persistence.EntityNotFoundException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 
 public interface ProjectServiceInterface {
-    List<Project> getAllProjects();
+    Page<Project> getProjects(ProjectFilter filter, Pageable pageable);
 
     Project getProjectById(Long projectId) throws EntityNotFoundException;
 

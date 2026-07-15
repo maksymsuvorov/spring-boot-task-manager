@@ -2,19 +2,25 @@ package com.maksymsuvorov.taskflow.service;
 
 import com.maksymsuvorov.taskflow.controller.dto.TaskCreateRequest;
 import com.maksymsuvorov.taskflow.controller.dto.TaskUpdateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.TaskFilter;
 import com.maksymsuvorov.taskflow.model.Project;
 import com.maksymsuvorov.taskflow.model.Task;
 import com.maksymsuvorov.taskflow.model.User;
 import com.maksymsuvorov.taskflow.repository.ProjectRepository;
 import com.maksymsuvorov.taskflow.repository.TaskRepository;
 import com.maksymsuvorov.taskflow.repository.UserRepository;
+import com.maksymsuvorov.taskflow.repository.specification.TaskSpecification;
 import com.maksymsuvorov.taskflow.security.AuthorizationService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +31,28 @@ public class TaskServiceImplementation implements TaskServiceInterface {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
+
+    private static final Set<String> ALLOWED_SORT_PROPERTIES =
+            Set.of("title", "status", "priority", "dueDate", "createdAt", "updatedAt");
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<Task> getTasks(TaskFilter filter, Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), ALLOWED_SORT_PROPERTIES);
+
+        Specification<Task> specification = Specification.allOf(
+                this.authorizationService.isAdmin()
+                        ? Specification.unrestricted()
+                        : TaskSpecification.visibleTo(this.authorizationService.currentEmail()),
+                TaskSpecification.hasStatus(filter.status()),
+                TaskSpecification.hasPriority(filter.priority()),
+                TaskSpecification.hasProject(filter.projectId()),
+                TaskSpecification.hasAssignee(filter.assigneeId()),
+                TaskSpecification.dueBefore(filter.dueBefore())
+        );
+
+        return this.taskRepository.findAll(specification, pageable);
+    }
 
     @Override
     @Transactional(readOnly = true)

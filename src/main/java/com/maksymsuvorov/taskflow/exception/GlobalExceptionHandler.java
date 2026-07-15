@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -52,6 +53,13 @@ public class GlobalExceptionHandler {
     public ApiError handleUnreadableBody(HttpMessageNotReadableException exception) {
         return ApiError.of(HttpStatus.BAD_REQUEST.value(), "Bad Request",
                 "Request body is malformed or has an invalid value format.");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        return ApiError.of(HttpStatus.BAD_REQUEST.value(), "Bad Request",
+                "Invalid value '" + exception.getValue() + "' for parameter '" + exception.getName() + "'.");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

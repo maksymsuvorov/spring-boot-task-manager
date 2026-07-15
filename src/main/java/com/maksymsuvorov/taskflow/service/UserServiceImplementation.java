@@ -1,18 +1,24 @@
 package com.maksymsuvorov.taskflow.service;
 
 import com.maksymsuvorov.taskflow.controller.dto.UserCreateRequest;
+import com.maksymsuvorov.taskflow.controller.dto.filter.UserFilter;
 import com.maksymsuvorov.taskflow.controller.dto.UserUpdateRequest;
 import com.maksymsuvorov.taskflow.model.User;
 import com.maksymsuvorov.taskflow.repository.ProjectRepository;
 import com.maksymsuvorov.taskflow.repository.TaskRepository;
 import com.maksymsuvorov.taskflow.repository.UserRepository;
+import com.maksymsuvorov.taskflow.repository.specification.UserSpecification;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -24,10 +30,21 @@ public class UserServiceImplementation implements UserServiceInterface {
     private final TaskRepository taskRepository;
     private final PasswordEncoder passwordEncoder;
 
+    private static final Set<String> ALLOWED_SORT_PROPERTIES =
+            Set.of("name", "email", "createdAt");
+
     @Override
     @Transactional(readOnly = true)
-    public List<User> getAllUsers() {
-        return this.userRepository.findAll();
+    public Page<User> getUsers(UserFilter filter, Pageable pageable) {
+        SortValidator.validate(pageable.getSort(), ALLOWED_SORT_PROPERTIES);
+
+        Specification<User> specification = Specification.allOf(
+                UserSpecification.nameContains(filter.name()),
+                UserSpecification.emailContains(filter.email()),
+                UserSpecification.hasRole(filter.role())
+        );
+
+        return this.userRepository.findAll(specification, pageable);
     }
 
     @Override
